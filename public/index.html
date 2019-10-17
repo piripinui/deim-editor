@@ -1,0 +1,126 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<html>
+    <head>
+        <rel="stylesheet" type="text/css" href="css/main.css" />
+        <meta http-equiv="content-type" content="text/php; charset=utf-8" />
+
+        <title>Dynamic Object Editor</title>
+
+        <script src="js/jquery-3.4.1.min.js"></script>
+        <!-- Load React. -->
+        <!-- Note: when deploying, replace "development.js" with "production.min.js". -->
+        <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
+        <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
+        <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+        <script src="https://unpkg.com/react-jsonschema-form/dist/react-jsonschema-form.js"></script>
+
+        <link rel="stylesheet" id="theme" href="//cdnjs.cloudflare.com/ajax/libs/bootswatch/3.3.6/darkly/bootstrap.min.css">
+
+        <style>
+          #form {
+            position: absolute;
+            padding: 10px;
+            width: 25%;
+
+          }
+          #selector {
+            padding: 10px;
+            color: black;
+          }
+          #js {
+            position: absolute;
+            padding: 10px;
+            width: 25%;
+            margin-left: 30%;
+            top: 10px;
+            background-color: white;
+          }
+          #jsText {
+            width: 50;
+            height: 100;
+          }
+        </style>
+    </head>
+
+    <body>
+        <div id="app">
+          <div id="selector">
+            <select id="models" onchange="switchSchema()">
+              <option value="de.workorder-1.0.0.json">Work Order</option>
+              <option value="de.location.base-1.0.0.json">Location Base</option>
+              <option value="de.asset-1.0.0.json">Asset</option>
+              <option value="de.skills-1.0.0.json">Skills</option>
+              <option value="de.asset.find.all-1.0.0.json">Asset - Find All</option>
+              <option value="de.asset.find.assets.by.uuids-1.0.0.json">Asset - Find By UUID</option>
+            </select>
+          </div>
+          <div id="form">
+          </div>
+          <div id="js">
+            <pre id="jsText">
+            </pre>
+          </div>
+        </div>
+
+        <script type="text/javascript">
+          function switchSchema() {
+            console.log($('#models').find(":selected").val());
+            processSchema($('#models').find(":selected").val(), true);
+          }
+        </script>
+
+        <script type="text/babel">
+          console.log("Initialising...");
+          function processSchema(schemaName, createHeader) {
+            var newSchema = {};
+
+            console.log("Setting up...");
+            // import JSONSchemaForm from "../node_modules/react-json-schema-form/Form.js";
+
+            // import Form from "../node_modules/react-json-schema-form/index.css";
+            const e = React.createElement;
+            const Form = JSONSchemaForm.default;
+
+            var schemas = {};
+
+            // Get the relevant Information Model...
+
+            $.get('/deim/getSchema/schemaName=' + schemaName, function(aSchema, status) {
+              console.log(aSchema);
+
+              if (typeof aSchema.properties != "undefined") {
+                if (typeof aSchema.properties.children != "undefined") {
+                  // Fudge a circular reference to this schema when it has "children" of the same schema type.
+                  aSchema.properties.children.items = {
+                    "type": "array",
+                    "title": "Sub Work Orders",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+
+              if (typeof aSchema.allOf != "undefined") {
+                console.log("Cannot display schemas with allOf...");
+                return;
+              }
+
+              console.log(aSchema);
+              const onSubmit = ({formData}, e) => {
+                console.log("Data submitted: ",  formData);
+                $("#jsText").text(JSON.stringify(formData, null, 2));
+              };
+              const log = (type) => console.log.bind(console, type);
+              const formElement = <Form schema={aSchema} onChange={log("changed")} onSubmit={onSubmit} onError={log("errors")} />;
+              ReactDOM.render(formElement, document.getElementById("form"));
+            });
+          }
+
+          processSchema('de.workorder-1.0.0.json', true);
+        </script>
+    </body>
+</html>
