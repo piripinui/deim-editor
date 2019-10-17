@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Examples of using the Digital Enterprise Information Model (DEIM)",
   "main": "index.js",
+  "homepage": "https://github.com/piripinui/deim-editor",
   "scripts": {
     "start": "node index.js"
   },
