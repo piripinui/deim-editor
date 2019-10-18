@@ -14,7 +14,8 @@
     "json-schema-merge-allof": "^0.7.0",
     "json-schema-ref-parser": "^7.1.1",
     "promise": "^8.0.3",
-    "request": "^2.88.0"
+    "request": "^2.88.0",
+    "lodash": ">=4.17.13"
   },
   "devDependencies": {
     "@babel/cli": "^7.6.4",
