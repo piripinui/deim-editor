@@ -50,11 +50,17 @@
           <div id="selector">
             <select id="models" onchange="switchSchema()">
               <option value="de.workorder-1.0.0.json">Work Order</option>
+              <option value="de.workorder.ingestion-1.0.0.json">Work Order Ingestion</option>
+              <option value="de.workorder.event-1.0.0.json">Work Order Event</option>
+              <option value="de.workorder.base-1.0.0.json">Work Order Base</option>
               <option value="de.location.base-1.0.0.json">Location Base</option>
+              <option value="de.location.ingestion-1.0.0.json">Location Ingestion</option>
               <option value="de.asset-1.0.0.json">Asset</option>
+              <option value="de.asset.event-1.0.0.json">Asset Event</option>
               <option value="de.skills-1.0.0.json">Skills</option>
               <option value="de.asset.find.all-1.0.0.json">Asset - Find All</option>
               <option value="de.asset.find.assets.by.uuids-1.0.0.json">Asset - Find By UUID</option>
+              <option value="test.json">Test Profile</option>
             </select>
           </div>
           <div id="form">
@@ -104,10 +110,10 @@
                 }
               }
 
-              if (typeof aSchema.allOf != "undefined") {
-                console.log("Cannot display schemas with allOf...");
-                return;
-              }
+              // if (typeof aSchema.allOf != "undefined") {
+              //   console.log("Cannot display schemas with allOf...");
+              //   return;
+              // }
 
               console.log(aSchema);
               const onSubmit = ({formData}, e) => {
