@@ -84,9 +84,7 @@
             var newSchema = {};
 
             console.log("Setting up...");
-            // import JSONSchemaForm from "../node_modules/react-json-schema-form/Form.js";
 
-            // import Form from "../node_modules/react-json-schema-form/index.css";
             const e = React.createElement;
             const Form = JSONSchemaForm.default;
 
@@ -95,7 +93,7 @@
             // Get the relevant Information Model...
 
             $.get('/deim/getSchema/schemaName=' + schemaName, function(aSchema, status) {
-              console.log(aSchema);
+              console.log("Retrieved " + schemaName, aSchema);
 
               if (typeof aSchema.properties != "undefined") {
                 if (typeof aSchema.properties.children != "undefined") {
@@ -109,11 +107,6 @@
                   }
                 }
               }
-
-              // if (typeof aSchema.allOf != "undefined") {
-              //   console.log("Cannot display schemas with allOf...");
-              //   return;
-              // }
 
               console.log(aSchema);
               const onSubmit = ({formData}, e) => {
