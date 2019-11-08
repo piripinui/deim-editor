@@ -1,12 +1,11 @@
 const request = require('request'),
 express = require('express'),
-$RefParser = require("json-schema-ref-parser"),
 mergeAllOf = require('json-schema-merge-allof'),
 Promise = require('promise'),
 path = require('path'),
 fs = require('fs');
 
-var app = express(), deim = {};
+var app = express(), deim = {}, shouldMerge = false;
 
 function readDir(dirname, onFileContent, onError) {
   fs.readdir(dirname, function(err, filenames) {
@@ -55,16 +54,33 @@ let fileResolver = {
 };
 
 app.get('/deim/getSchema/:schemaName', function(req, res) {
+  if (typeof req.query.shouldMerge != "undefined") {
+    switch(req.query.shouldMerge) {
+      case "true": {
+        shouldMerge = true;
+        break;
+      }
+      case "false": {
+        shouldMerge = false;
+        break;
+      }
+      case "default": {
+        console.log("Error: Unrecognised value for query parameters shouldMerge - defaulting to false");
+        break;
+      }
+    }
+  }
   if (typeof req.params.schemaName != "undefined") {
     var schemaName = req.params.schemaName.split("=")[1];
     console.log("Fetching schema name " + schemaName);
 
     if (typeof deim[schemaName] != "undefined") {
       var origSchema = JSON.parse(deim[schemaName]);
+      // Initialise globalDefinitions, which holds all schema definitions we want to put into "definitions".
       globalDefinitions = {};
       currentSchemaId = origSchema["$id"];
       origSchema = bundleRefs(origSchema);
-      // Add definitions.
+      // Add definitions property to the schema and populate with content of globalDefinitions.
       for (var prop in globalDefinitions) {
         if (Object.prototype.hasOwnProperty.call(globalDefinitions, prop)) {
           if (typeof origSchema.definitions == "undefined")
@@ -72,20 +88,20 @@ app.get('/deim/getSchema/:schemaName', function(req, res) {
           origSchema.definitions[prop] = globalDefinitions[prop];
         }
       }
-      // Merge if there is an allOf.
-      if (typeof origSchema.allOf != "undefined") {
+
+      if (typeof origSchema.allOf != "undefined" && shouldMerge) {
+        // Merge the "allOfs" into one schema.
         var aPromise = merge(origSchema);
         aPromise.then(function(data) {
           data = addDummyTitlesToProperties(data);
           data = addDummyTitlesToDefinitions(data);
-          console.log(JSON.stringify(data, null, 2));
           res.json(data);
         })
       }
       else {
+        // Leave "allOfs" in place.
         origSchema = addDummyTitlesToProperties(origSchema);
         origSchema = addDummyTitlesToDefinitions(origSchema);
-        console.log(JSON.stringify(origSchema, null, 2));
         res.json(origSchema);
       }
     }
@@ -111,7 +127,9 @@ function refactorRef(aSchema, depth) {
     depth = 0;
 
   if (aSchema["$ref"] == currentSchemaId) {
-    console.log("Ignoring " + aSchema["$ref"] + ": refers to self.")
+    // We have got a reference to this schema i.e. a recursive reference. Leave the reference intact.
+    console.log("Reference " + aSchema["$ref"] + ": refers to self - leaving intact.")
+
     return aSchema;
   }
 
@@ -128,6 +146,15 @@ function refactorRef(aSchema, depth) {
       if (typeof globalDefinitions[ref] == "undefined") {
         if (typeof deim[ref] != "undefined") {
           var refSchema = JSON.parse(deim[ref]);
+          // Remove any "$schema" and "$id" references since they define a schema. This confuse using the "#" anchor from within this schema as
+          // it will expect "definitions" to be at the same level as the schema, when we want to use definitions at the root of the top-level schema.
+          if (typeof refSchema["$schema"] != "undefined") {
+            delete refSchema["$schema"];
+          };
+          if (typeof refSchema["$id"] != "undefined") {
+            delete refSchema["$id"];
+          };
+
           // The referenced schema may itself have references, so bundle them.
           globalDefinitions[ref] = bundleRefs(refSchema, depth++);
         }
@@ -146,8 +173,9 @@ function refactorRef(aSchema, depth) {
 }
 
 function bundleRefs(mySchema, depth) {
+  // This function traverses mySchema bundling up references to be placed in a single "definitions" property when finished.
+  // It is called recursively as the structure is navigated.
 
-  console.log(definitionStack);
   if (typeof depth == "undefined")
     depth = 0;
   var indent = "";
@@ -167,6 +195,7 @@ function bundleRefs(mySchema, depth) {
         case 'allOf':
           depth++;
           mySchema[prop].forEach(function(anItem) {
+            // For each item in the allOf array, bundle up the references.
             var anItem = bundleRefs(anItem, depth);
           });
           break;
@@ -176,6 +205,7 @@ function bundleRefs(mySchema, depth) {
           break;
         case 'definitions':
           depth++;
+          // Make sure that any definitions are bundled as well.
           var bundledDefs = bundleRefs(mySchema[prop], depth);
           for (var defProp in bundledDefs) {
             if (Object.prototype.hasOwnProperty.call(bundledDefs, defProp)) {
@@ -203,18 +233,22 @@ function bundleRefs(mySchema, depth) {
 
           // An array may have external refs too.
           if (typeof mySchema[prop].type != "undefined" && mySchema[prop].type == "array") {
-            if (typeof mySchema[prop].items["$ref"] != "undefined") {
-              var ref = mySchema[prop].items["$ref"];
-              if (ref[0] != "#") {
-                // Got an external reference.
-                if (typeof globalDefinitions[ref] == "undefined") {
-                  // There isn't an existing definition for it so create one.
-                  mySchema[prop].items = refactorRef(mySchema[prop].items, depth);
-                  continue;
-                }
-                else {
-                  // There is an existing definition for it, so just update the schema reference.
-                  mySchema[prop].items["$ref"] = "#/definitions/" + ref;
+            // An array definition need not explicitly define "items" with types. If so, then any object can be in the array, in which case we leave it alone
+            // since there will not be any references.
+            if (typeof mySchema[prop].items != "undefined") {
+              if (typeof mySchema[prop].items["$ref"] != "undefined") {
+                var ref = mySchema[prop].items["$ref"];
+                if (ref[0] != "#") {
+                  // Got an external reference.
+                  if (typeof globalDefinitions[ref] == "undefined") {
+                    // There isn't an existing definition for it so create one.
+                    mySchema[prop].items = refactorRef(mySchema[prop].items, depth);
+                    continue;
+                  }
+                  else {
+                    // There is an existing definition for it, so just update the schema reference.
+                    mySchema[prop].items["$ref"] = "#/definitions/" + ref;
+                  }
                 }
               }
             }
@@ -256,46 +290,6 @@ function merge(mySchema) {
   return aPromise;
 }
 
-function removeSchemaDefs(mySchema, depth) {
-  // Removes any $schema and $id properties from sub-schemas.
-  if (typeof depth == "undefined") {
-    depth = 0;
-  };
-
-  for (var prop in mySchema) {
-    if (Object.prototype.hasOwnProperty.call(mySchema, prop)) {
-      switch(prop) {
-        case '$schema':
-          if (depth > 0)
-            delete mySchema["$schema"];
-          break;
-        case '$id':
-          if (depth > 0)
-            delete mySchema["$id"];
-          break;
-        default:
-          var val = mySchema[prop];
-          if (typeof val == "object") {
-            var subSchema = removeSchemaDefs(val, depth + 1);
-            mySchema[prop] = subSchema;
-          }
-          if (typeof val == "array") {
-            for (var i = 0; i < val.length; i++) {
-              var item = val[i];
-              if (typeof val == "Object") {
-                var subSchema = removeSchemaDefs(val, depth + 1);
-                mySchema[prop] = subSchema;
-              }
-            }
-          }
-          break;
-      }
-    }
-  }
-
-  return mySchema;
-}
-
 function addDummyTitlesToProperties(mySchema) {
   for (var prop in mySchema.properties) {
     if (Object.prototype.hasOwnProperty.call(mySchema.properties, prop)) {
@@ -318,7 +312,6 @@ function addDummyTitlesToDefinitions(mySchema) {
 
 function addDummyTitles(mySchema, key) {
   var subSchema;
-  // console.log(mySchema);
   if (key != "properties" && key != "definitions" && typeof mySchema.title == "undefined") {
     if (typeof key == "undefined") {
       mySchema.title = "Dummy title";
@@ -330,30 +323,12 @@ function addDummyTitles(mySchema, key) {
 
   for (var prop in mySchema) {
     if (Object.prototype.hasOwnProperty.call(mySchema, prop)) {
-      // console.log("Processing " + prop + " " + typeof mySchema[prop]);
-
       if (typeof mySchema[prop] == "object") {
         if (!Array.isArray(mySchema[prop])) {
           subSchema = addDummyTitles(mySchema[prop], prop);
           mySchema[prop] = subSchema;
         }
       }
-
-      // switch(typeof mySchema[prop]) {
-      //   case 'object':
-      //     subSchema = addDummyTitles(mySchema[prop], prop);
-      //     mySchema[prop] = subSchema;
-      //     break;
-      //   case 'array':
-      //     for (var i = 0; i < mySchema[prop].length; i++) {
-      //       var item = mySchema[prop][i];
-      //       subSchema = addDummyTitles(item, prop);
-      //       mySchema[prop][i] = subSchema;
-      //     }
-      //     break;
-      //   default:
-      //     break;
-      // }
     }
   }
 

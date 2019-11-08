@@ -50,17 +50,8 @@
           <div id="selector">
             <select id="models" onchange="switchSchema()">
               <option value="de.workorder-1.0.0.json">Work Order</option>
-              <option value="de.workorder.ingestion-1.0.0.json">Work Order Ingestion</option>
-              <option value="de.workorder.event-1.0.0.json">Work Order Event</option>
-              <option value="de.workorder.base-1.0.0.json">Work Order Base</option>
-              <option value="de.location.base-1.0.0.json">Location Base</option>
-              <option value="de.location.ingestion-1.0.0.json">Location Ingestion</option>
-              <option value="de.asset-1.0.0.json">Asset</option>
-              <option value="de.asset.event-1.0.0.json">Asset Event</option>
-              <option value="de.skills-1.0.0.json">Skills</option>
-              <option value="de.asset.find.all-1.0.0.json">Asset - Find All</option>
-              <option value="de.asset.find.assets.by.uuids-1.0.0.json">Asset - Find By UUID</option>
-              <option value="test.json">Test Profile</option>
+              <option value="de.location-1.0.0.json">Location</option>
+              <option value="de.product.service.requirement-1.0.0.json">Product Service Requirement</option>
             </select>
           </div>
           <div id="form">
@@ -89,6 +80,7 @@
             const Form = JSONSchemaForm.default;
 
             var schemas = {};
+            const formData = {};
 
             // Get the relevant Information Model...
 
@@ -112,9 +104,35 @@
               const onSubmit = ({formData}, e) => {
                 console.log("Data submitted: ",  formData);
                 $("#jsText").text(JSON.stringify(formData, null, 2));
+
+                $.ajax("http://localhost:1880/createWorkRequest", {
+                  type: "POST",
+                  data: formData,
+                  success: function(data) {
+                    console.log("Submission was successful: ", data);
+                    for (var prop in data) {
+                      if (Object.prototype.hasOwnProperty.call(data, prop)) {
+                        formData[prop] = data[prop];
+                      }
+                    }
+                    // Now refresh the UI.
+                    console.log(formElement);
+                    alert("The Work Order was created successfully.");
+                  },
+                  error: function(err, data) {
+                    console.log("Error: ", err, data);
+                    alert("There was an error - the Work Order was not created because " + err.responseJSON.validationErrorReason + ".");
+                  }
+                });
+              }
+
+              const onChange = ({formData}, e) => {
+                $("#jsText").text(JSON.stringify(formData, null, 2));
               };
+
               const log = (type) => console.log.bind(console, type);
-              const formElement = <Form schema={aSchema} onChange={log("changed")} onSubmit={onSubmit} onError={log("errors")} />;
+              const formElement = <Form schema={aSchema} formData={formData} onChange={onChange} onSubmit={onSubmit} onError={log("errors")} />;
+              console.log(formElement);
               ReactDOM.render(formElement, document.getElementById("form"));
             });
           }
