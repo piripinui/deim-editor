@@ -52,6 +52,7 @@
               <option value="de.workorder-1.0.0.json">Work Order</option>
               <option value="de.location-1.0.0.json">Location</option>
               <option value="de.product.service.requirement-1.0.0.json">Product Service Requirement</option>
+              <option value="de.product.service.requirement.profile.assetsuite-1.0.0.json">Product Service Requirement - Asset Suite</option>
             </select>
           </div>
           <div id="form">
@@ -84,7 +85,7 @@
 
             // Get the relevant Information Model...
 
-            $.get('/deim/getSchema/schemaName=' + schemaName, function(aSchema, status) {
+            $.get('/deim/getSchema/schemaName=' + schemaName + "?shouldMerge=true", function(aSchema, status) {
               console.log("Retrieved " + schemaName, aSchema);
 
               if (typeof aSchema.properties != "undefined") {
