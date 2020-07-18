@@ -12,7 +12,7 @@
   "dependencies": {
     "express": "^4.17.1",
     "json-schema-merge-allof": "^0.7.0",
-    "lodash": ">=4.17.13",
+    "lodash": ">=4.17.19",
     "promise": "^8.0.3",
     "request": "^2.88.0"
   },
